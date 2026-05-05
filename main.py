@@ -5,7 +5,7 @@ from database import engine, Base, get_db
 from auth import hash_password, verify_password, create_access_token, get_current_user
 from pydantic import BaseModel
 from datetime import datetime
-from fastapi.security import OAuth2PasswordRequestForm
+from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 
 app = FastAPI()
 
