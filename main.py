@@ -1,19 +1,10 @@
-from fastapi import FastAPI, Depends, HTTPException, Header
+from fastapi import FastAPI, Depends, HTTPException
 from sqlalchemy.orm import Session
 import models, schemas
-from jose import jwt
 from database import engine, Base, get_db
-from auth import hash_password, verify_password, create_access_token
-from fastapi.security import OAuth2PasswordBearer
-from auth import get_current_user
-from fastapi import Body
+from auth import hash_password, verify_password, create_access_token, get_current_user
 from pydantic import BaseModel
 from datetime import datetime
-
-
-
-
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/login")
 
 app = FastAPI()
 
@@ -55,35 +46,13 @@ def read_root():
     return {"message": "API is running"}
 
 
-SECRET_KEY = "secret123"
-ALGORITHM = "HS256"
-
 @app.get("/me")
-def get_me(authorization: str = Header(...), db: Session = Depends(get_db)):
-    try:
-        token = authorization.split(" ")[1]
-
-        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-        user_id = payload.get("user_id")
-
-        if user_id is None:
-            raise HTTPException(status_code=401, detail="Invalid token")
-
-        user = db.query(models.User).filter(models.User.id == user_id).first()
-
-        if user is None:
-            raise HTTPException(status_code=404, detail="User not found")
-
-        return {
-            "id": user.id,
-            "email": user.email,
-            "role": user.role
-        }
-
-    except Exception as e:
-        raise HTTPException(status_code=401, detail=str(e))
-    
-
+def get_me(user = Depends(get_current_user), db: Session = Depends(get_db)):
+    return {
+        "id": user.id,
+        "email": user.email,
+        "role": user.role
+    }
 
 class ProjectCreate(BaseModel):
     name: str
@@ -92,16 +61,12 @@ class ProjectCreate(BaseModel):
 @app.post("/projects")
 def create_project(
     project: ProjectCreate,
-    authorization: str = Header(...),
+    user = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    token = authorization.split(" ")[1]
-    payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-    user_id = payload.get("user_id")
-
     new_project = models.Project(
         name=project.name,
-        created_by=user_id
+        created_by=user.id
     )
 
     db.add(new_project)
@@ -111,22 +76,16 @@ def create_project(
     return {
         "id": new_project.id,
         "name": new_project.name,
-        "created_by": user_id
+        "created_by": user.id
     }
-
 
 
 @app.post("/tasks")
 def create_task(
     task: schemas.TaskCreate,
-    authorization: str = Header(...),
+    user = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    token = authorization.split(" ")[1]
-    payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-    user_id = payload.get("user_id")
-
-    # (simple check) project exists
     project = db.query(models.Project).filter(models.Project.id == task.project_id).first()
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
@@ -149,24 +108,20 @@ def create_task(
         "status": new_task.status
     }
 
+
 @app.patch("/tasks/{task_id}")
 def update_task(
     task_id: int,
     update: schemas.TaskUpdate,
-    authorization: str = Header(...),
+    user = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    token = authorization.split(" ")[1]
-    payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-    user_id = payload.get("user_id")
-
     task = db.query(models.Task).filter(models.Task.id == task_id).first()
 
     if not task:
         raise HTTPException(status_code=404, detail="Task not found")
 
-    # RBAC: only assigned user can update
-    if task.assigned_to != user_id:
+    if task.assigned_to != user.id:
         raise HTTPException(status_code=403, detail="Not allowed")
 
     task.status = update.status
@@ -178,17 +133,12 @@ def update_task(
     }
 
 
-
 @app.get("/dashboard")
 def get_dashboard(
-    authorization: str = Header(...),
+    user = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    token = authorization.split(" ")[1]
-    payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-    user_id = payload.get("user_id")
-
-    tasks = db.query(models.Task).filter(models.Task.assigned_to == user_id).all()
+    tasks = db.query(models.Task).filter(models.Task.assigned_to == user.id).all()
 
     total = len(tasks)
     completed = len([t for t in tasks if t.status == "done"])
