@@ -10,7 +10,6 @@ app = FastAPI()
 
 Base.metadata.create_all(bind=engine)
 
-
 @app.post("/signup")
 def signup(user: schemas.UserCreate, db: Session = Depends(get_db)):
     existing = db.query(models.User).filter(models.User.email == user.email).first()
@@ -28,7 +27,6 @@ def signup(user: schemas.UserCreate, db: Session = Depends(get_db)):
 
     return {"message": "User created successfully"}
 
-
 @app.post("/login")
 def login(user: schemas.UserLogin, db: Session = Depends(get_db)):
     db_user = db.query(models.User).filter(models.User.email == user.email).first()
@@ -40,14 +38,12 @@ def login(user: schemas.UserLogin, db: Session = Depends(get_db)):
 
     return {"access_token": token, "token_type": "bearer"}
 
-
 @app.get("/")
 def read_root():
     return {"message": "API is running"}
 
-
 @app.get("/me")
-def get_me(user = Depends(get_current_user), db: Session = Depends(get_db)):
+def get_me(user = Depends(get_current_user)):
     return {
         "id": user.id,
         "email": user.email,
@@ -57,13 +53,8 @@ def get_me(user = Depends(get_current_user), db: Session = Depends(get_db)):
 class ProjectCreate(BaseModel):
     name: str
 
-
 @app.post("/projects")
-def create_project(
-    project: ProjectCreate,
-    user = Depends(get_current_user),
-    db: Session = Depends(get_db)
-):
+def create_project(project: ProjectCreate, user = Depends(get_current_user), db: Session = Depends(get_db)):
     new_project = models.Project(
         name=project.name,
         created_by=user.id
@@ -79,13 +70,8 @@ def create_project(
         "created_by": user.id
     }
 
-
 @app.post("/tasks")
-def create_task(
-    task: schemas.TaskCreate,
-    user = Depends(get_current_user),
-    db: Session = Depends(get_db)
-):
+def create_task(task: schemas.TaskCreate, user = Depends(get_current_user), db: Session = Depends(get_db)):
     project = db.query(models.Project).filter(models.Project.id == task.project_id).first()
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
@@ -108,14 +94,8 @@ def create_task(
         "status": new_task.status
     }
 
-
 @app.patch("/tasks/{task_id}")
-def update_task(
-    task_id: int,
-    update: schemas.TaskUpdate,
-    user = Depends(get_current_user),
-    db: Session = Depends(get_db)
-):
+def update_task(task_id: int, update: schemas.TaskUpdate, user = Depends(get_current_user), db: Session = Depends(get_db)):
     task = db.query(models.Task).filter(models.Task.id == task_id).first()
 
     if not task:
@@ -132,12 +112,8 @@ def update_task(
         "status": task.status
     }
 
-
 @app.get("/dashboard")
-def get_dashboard(
-    user = Depends(get_current_user),
-    db: Session = Depends(get_db)
-):
+def get_dashboard(user = Depends(get_current_user), db: Session = Depends(get_db)):
     tasks = db.query(models.Task).filter(models.Task.assigned_to == user.id).all()
 
     total = len(tasks)
